@@ -6,13 +6,17 @@ import re
 import tqdm
 import os
 
+# use selenium to run javascript on dropbox page to create links
+from selenium import webdriver
+driver = webdriver.PhantomJS()
+
 # e.g. DROPBOX_URL ='https://www.dropbox.com/sh/23j4ldkj3jk32m/3lkjdlk3j2k34k4kkdkdjf?dl=0'
 DROPBOX_URL = ''
-DESTINATION_FOLDER = 'pics'
+DESTINATION_FOLDER = 'db_data'
 MAX_CONCURRENT_DOWNLOADS = 5
 
 
-def buildurls(urls_raw, filetype='.JPG'):
+def buildurls(urls_raw):
     """ create list of download urls - one for each file """
 
     # filter list for duplicates - turn it into a set and into a list again
@@ -22,7 +26,7 @@ def buildurls(urls_raw, filetype='.JPG'):
     return [(
                 url[:-5].split('/')[6],
                 url.replace('dl=0', 'dl=1')
-            ) for url in urls_raw if filetype in url]
+            ) for url in urls_raw]
 
 
 def writetofile(directory, filename, content):
@@ -62,11 +66,19 @@ async def download(url, filename, directory, semaphore):
 
 async def parseresponse(url_overview):
     """ filter the response for all available items via href """
-    async with aiohttp.ClientSession() as session:
-        url_overview = await getrequest(session, DROPBOX_URL)
-
+    
+    # previous code:
+    # async with aiohttp.ClientSession() as session:
+    #     url_overview = await getrequest(session, DROPBOX_URL)
+    
+    # new code runs javascript to generate links
+    driver.get(DROPBOX_URL)
+    url_overview = driver.page_source
+    
     # still much room for optimizations
     urls = re.findall(r'href=[\'"]?([^\'" >]+)', url_overview)
+    # only return urls with pattern "/sh/" since others are not files to download (e.g. css)
+    urls = [x for x in urls if "/sh/" in x]
 
     return urls
 
